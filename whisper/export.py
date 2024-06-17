@@ -217,7 +217,7 @@ def export_decoder(model, model_name):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_type", default="base", type=ModelType, help="Use quant models"
+        "--model_type", default="base", type=ModelType, help="Version of whisper model"
     )
 
     args = parser.parse_args()
