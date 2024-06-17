@@ -178,9 +178,9 @@ class SuppressBlank:
 
     def apply(self, logits, tokens):
         if tokens.shape[1] == self.sample_begin:
-            logits[
-                :, self.tokenizer.encode(" ") + [self.tokenizer.eot]
-            ] = -np.inf
+            logits[:, self.tokenizer.encode(" ") + [self.tokenizer.eot]] = (
+                -np.inf
+            )
 
 
 class SuppressTokens:
