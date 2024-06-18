@@ -1,4 +1,7 @@
+# Main idea from repo: https://github.com/axinc-ai/whisper-export/tree/onnx-export
+
 import argparse
+import os
 from enum import Enum
 
 import torch
@@ -7,6 +10,11 @@ import torch.nn as nn
 import whisper
 from src.decoder import TextDecoder
 from src.encoder import AudioEncoder
+
+
+WEIGHTS_DIR = "weights"
+ENCODER_NAME = "encoder"
+DECODER_NAME = "decoder"
 
 
 class ModelType(Enum):
@@ -34,36 +42,14 @@ class DecoderModel(nn.Module):
         self,
         tokens,
         audio_features,
-        pos_emb,
-        k1,
-        v1,
-        k2,
-        v2,
-        k3,
-        v3,
-        k4,
-        v4,
-        k5,
-        v5,
-        k6,
-        v6,
+        kv_cache,
+        offset,
     ):
         return self.decoder(
             tokens,
             audio_features,
-            pos_emb,
-            k1,
-            v1,
-            k2,
-            v2,
-            k3,
-            v3,
-            k4,
-            v4,
-            k5,
-            v5,
-            k6,
-            v6,
+            kv_cache,
+            offset,
         )
 
 
@@ -92,98 +78,31 @@ def export_decoder(model, model_name):
     (
         tokens,
         audio_features,
-        pos_emb,
-        k1,
-        v1,
-        k2,
-        v2,
-        k3,
-        v3,
-        k4,
-        v4,
-        k5,
-        v5,
-        k6,
-        v6,
+        kv_cache,
+        offset,
     ) = (
         torch.zeros((1, 1), dtype=torch.int32),
         torch.rand((1, 1500, 512), dtype=torch.float32),
-        torch.zeros((1, 1, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
-        torch.zeros((1, 4, 512), dtype=torch.float32),
+        torch.zeros((12, 1, 451, 512), dtype=torch.float32),
+        torch.tensor(0),
     )
     input_names = [
         "tokens",
         "audio_features",
-        "pos_emb",
-        "k1",
-        "v1",
-        "k2",
-        "v2",
-        "k3",
-        "v3",
-        "k4",
-        "v4",
-        "k5",
-        "v5",
-        "k6",
-        "v6",
+        "kv_cache",
+        "offset",
     ]
     output_names = [
         "logits",
-        "output_k1",
-        "output_v1",
-        "output_k2",
-        "output_v2",
-        "output_k3",
-        "output_v3",
-        "output_k4",
-        "output_v4",
-        "output_k5",
-        "output_v5",
-        "output_k6",
-        "output_v6",
+        "output_kv_cache",
     ]
 
     dynamic_axes = {
         "tokens": {0: "batch_size", 1: "token_len"},
         "audio_features": {0: "batch_size"},
-        "pos_emb": {0: "batch_size", 1: "token_len"},
-        "k1": {0: "batch_size", 1: "offset_len"},
-        "k2": {0: "batch_size", 1: "offset_len"},
-        "k3": {0: "batch_size", 1: "offset_len"},
-        "k4": {0: "batch_size", 1: "offset_len"},
-        "k5": {0: "batch_size", 1: "offset_len"},
-        "k6": {0: "batch_size", 1: "offset_len"},
-        "v1": {0: "batch_size", 1: "offset_len"},
-        "v2": {0: "batch_size", 1: "offset_len"},
-        "v3": {0: "batch_size", 1: "offset_len"},
-        "v4": {0: "batch_size", 1: "offset_len"},
-        "v5": {0: "batch_size", 1: "offset_len"},
-        "v6": {0: "batch_size", 1: "offset_len"},
+        "kv_cache": {1: "batch_size"},
         "logits": {0: "batch_size", 1: "token_len"},
-        "output_k1": {1: "batch_size"},
-        "output_k2": {1: "batch_size"},
-        "output_k3": {1: "batch_size"},
-        "output_k4": {1: "batch_size"},
-        "output_k5": {1: "batch_size"},
-        "output_k6": {1: "batch_size"},
-        "output_v1": {1: "batch_size"},
-        "output_v2": {1: "batch_size"},
-        "output_v3": {1: "batch_size"},
-        "output_v4": {1: "batch_size"},
-        "output_v5": {1: "batch_size"},
-        "output_v6": {1: "batch_size"},
+        "output_kv_cache": {1: "batch_size"},
     }
 
     torch.onnx.export(
@@ -191,19 +110,8 @@ def export_decoder(model, model_name):
         (
             tokens,
             audio_features,
-            pos_emb,
-            k1,
-            v1,
-            k2,
-            v2,
-            k3,
-            v3,
-            k4,
-            v4,
-            k5,
-            v5,
-            k6,
-            v6,
+            kv_cache,
+            offset,
         ),
         model_name,
         verbose=False,
@@ -217,14 +125,29 @@ def export_decoder(model, model_name):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_type", default="base", type=ModelType, help="Version of whisper model"
+        "--model_type",
+        default="base",
+        type=ModelType,
+        help="Version of whisper model",
     )
 
     args = parser.parse_args()
     model = whisper.load_model(args.model_type.value)
     model = model.eval()
-    torch.save(model.encoder.state_dict(), "weights/encoder.pt")
-    torch.save(model.decoder.state_dict(), "weights/decoder.pt")
+
+    os.makedirs(WEIGHTS_DIR, exist_ok=True)
+    torch.save(
+        model.encoder.state_dict(),
+        os.path.join(
+            WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.pt"
+        ),
+    )
+    torch.save(
+        model.decoder.state_dict(),
+        os.path.join(
+            WEIGHTS_DIR, f"{args.model_type.value}_{DECODER_NAME}.pt"
+        ),
+    )
 
     dims = model.dims
 
@@ -235,7 +158,13 @@ def main() -> None:
         n_head=dims.n_audio_head,
         n_layer=dims.n_audio_layer,
     )
-    encoder.load_state_dict(torch.load("weights/encoder.pt"))
+    encoder.load_state_dict(
+        torch.load(
+            os.path.join(
+                WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.pt"
+            )
+        )
+    )
     encoder = encoder.eval()
 
     decoder = TextDecoder(
@@ -245,11 +174,27 @@ def main() -> None:
         n_head=dims.n_text_head,
         n_layer=dims.n_text_layer,
     )
-    decoder.load_state_dict(torch.load("weights/decoder.pt"))
+    decoder.load_state_dict(
+        torch.load(
+            os.path.join(
+                WEIGHTS_DIR, f"{args.model_type.value}_{DECODER_NAME}.pt"
+            )
+        )
+    )
     decoder = decoder.eval()
 
-    export_encoder(encoder, "weights/encoder.onnx")
-    export_decoder(decoder, "weights/decoder.onnx")
+    export_encoder(
+        encoder,
+        os.path.join(
+            WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.onnx"
+        ),
+    )
+    export_decoder(
+        decoder,
+        os.path.join(
+            WEIGHTS_DIR, f"{args.model_type.value}_{DECODER_NAME}.onnx"
+        ),
+    )
 
 
 if __name__ == "__main__":

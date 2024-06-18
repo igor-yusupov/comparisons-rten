@@ -187,19 +187,8 @@ class TextDecoder(nn.Module):
         self,
         x: Tensor,
         xa: Tensor,
-        pos_emb: Tensor,
-        k1: Optional[Tensor] = None,
-        v1: Optional[Tensor] = None,
-        k2: Optional[Tensor] = None,
-        v2: Optional[Tensor] = None,
-        k3: Optional[Tensor] = None,
-        v3: Optional[Tensor] = None,
-        k4: Optional[Tensor] = None,
-        v4: Optional[Tensor] = None,
-        k5: Optional[Tensor] = None,
-        v5: Optional[Tensor] = None,
-        k6: Optional[Tensor] = None,
-        v6: Optional[Tensor] = None,
+        kv_cache: Tensor,
+        offset: Tensor,
     ):
         """
         x : torch.LongTensor, shape = (batch_size, <= n_ctx)
@@ -208,19 +197,26 @@ class TextDecoder(nn.Module):
             the encoded audio features to be attended on
         """
         # minus one because we pre allocate kv_cache
-        x = self.token_embedding(x) + pos_emb
+        x = (
+            self.token_embedding(x)
+            + self.positional_embedding[offset : offset + x.shape[-1]]
+        )
         x = x.to(xa.dtype)
+        output_kv_cache = torch.zeros(kv_cache.shape)
 
-        x, k1, v1 = self.blocks[0](x, xa, k=k1, v=v1)
-        x, k2, v2 = self.blocks[1](x, xa, k=k2, v=v2)
-        x, k3, v3 = self.blocks[2](x, xa, k=k3, v=v3)
-        x, k4, v4 = self.blocks[3](x, xa, k=k4, v=v4)
-        x, k5, v5 = self.blocks[4](x, xa, k=k5, v=v5)
-        x, k6, v6 = self.blocks[5](x, xa, k=k6, v=v6)
+        for i, block in enumerate(self.blocks):
+            x, k, v = block(
+                x,
+                xa,
+                k=kv_cache[i][:, :offset, :],
+                v=kv_cache[i + 1][:, :offset, :],
+            )
+            output_kv_cache[i, :, : offset + x.shape[-1], :] = k
+            output_kv_cache[i + 1, :, : offset + x.shape[-1], :] = v
 
         x = self.ln(x)
         logits = (
             x @ torch.transpose(self.token_embedding.weight.to(x.dtype), 0, 1)
         ).float()
 
-        return logits, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6
+        return logits, output_kv_cache
