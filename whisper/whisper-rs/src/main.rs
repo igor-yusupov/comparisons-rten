@@ -3,10 +3,9 @@ use std::time::Instant;
 
 fn main() {
     let whisper = whisper::Whisper::new(
-        "../weights/encoder.rten",
-        "../weights/decoder.rten",
+        "../weights/base_encoder.rten",
+        "../weights/base_decoder.rten",
         "../weights/multilingual.tiktoken",
-        "../weights/positional_embedding.npz",
         "../weights/mel_filters.npz",
     );
     let start = Instant::now();
