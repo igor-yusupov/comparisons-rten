@@ -81,7 +81,7 @@ def export_decoder(model, model_name):
         kv_cache,
         offset,
     ) = (
-        torch.zeros((1, 1), dtype=torch.int32),
+        torch.zeros((1, 4), dtype=torch.int32),
         torch.rand((1, 1500, 512), dtype=torch.float32),
         torch.zeros((12, 1, 451, 512), dtype=torch.float32),
         torch.tensor(0),

@@ -185,7 +185,7 @@ class TextDecoder(nn.Module):
 
     def forward(
         self,
-        x: Tensor,
+        tokens: Tensor,
         xa: Tensor,
         kv_cache: Tensor,
         offset: Tensor,
@@ -198,21 +198,21 @@ class TextDecoder(nn.Module):
         """
         # minus one because we pre allocate kv_cache
         x = (
-            self.token_embedding(x)
-            + self.positional_embedding[offset : offset + x.shape[-1]]
+            self.token_embedding(tokens)
+            + self.positional_embedding[offset : offset + tokens.shape[-1]]
         )
         x = x.to(xa.dtype)
         output_kv_cache = torch.zeros(kv_cache.shape)
 
-        for i, block in enumerate(self.blocks):
+        for i, block in zip(range(0, len(self.blocks) * 2, 2), self.blocks):
             x, k, v = block(
                 x,
                 xa,
                 k=kv_cache[i][:, :offset, :],
                 v=kv_cache[i + 1][:, :offset, :],
             )
-            output_kv_cache[i, :, : offset + x.shape[-1], :] = k
-            output_kv_cache[i + 1, :, : offset + x.shape[-1], :] = v
+            output_kv_cache[i, :, : offset + tokens.shape[-1], :] = k
+            output_kv_cache[i + 1, :, : offset + tokens.shape[-1], :] = v
 
         x = self.ln(x)
         logits = (

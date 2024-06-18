@@ -24,13 +24,11 @@ from src.decode import (
 from src.tokenizer import get_tokenizer
 from src.utils import softmax
 
-WEIGHT_ENC_PATH = "../weights/encoder.onnx"
-WEIGHT_DEC_PATH = "../weights/decoder.onnx"
+WEIGHT_ENC_PATH = "../weights/base_encoder.onnx"
+WEIGHT_DEC_PATH = "../weights/base_decoder.onnx"
 
 WEIGHT_ENC_QUANT_PATH = "../weights/encoder_quant.onnx"
 WEIGHT_DEC_QUANT_PATH = "../weights/decoder_quant.onnx"
-
-POSITIONAL_EMB = np.load("../weights/positional_embedding.npz")["pos_emb"]
 
 AUDIO_PATH = "../data/audio.wav"
 
@@ -217,43 +215,18 @@ def inference_logits(
         tokens = tokens[:, -1:]
 
     tokens = tokens.astype(np.int32)
-    offset = np.array(offset, dtype=np.int32)
+    offset = np.array(offset, dtype=np.int64)
     kv_cache = kv_cache.astype(np.float32)
-    pos_emb = POSITIONAL_EMB[offset.item() : offset.item() + tokens.shape[-1]]
-    pos_emb = np.expand_dims(pos_emb, axis=0)
     output = dec_net.run(
         None,
         {
             "tokens": tokens,
             "audio_features": audio_features,
-            "pos_emb": pos_emb,
-            "k1": kv_cache[0][:, : offset.item(), :],
-            "v1": kv_cache[1][:, : offset.item(), :],
-            "k2": kv_cache[2][:, : offset.item(), :],
-            "v2": kv_cache[3][:, : offset.item(), :],
-            "k3": kv_cache[4][:, : offset.item(), :],
-            "v3": kv_cache[5][:, : offset.item(), :],
-            "k4": kv_cache[6][:, : offset.item(), :],
-            "v4": kv_cache[7][:, : offset.item(), :],
-            "k5": kv_cache[8][:, : offset.item(), :],
-            "v5": kv_cache[9][:, : offset.item(), :],
-            "k6": kv_cache[10][:, : offset.item(), :],
-            "v6": kv_cache[11][:, : offset.item(), :],
+            "kv_cache": kv_cache,
+            "offset": offset,
         },
     )
-    logits, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6 = output
-    kv_cache[0, :, : offset.item() + tokens.shape[-1], :] = k1
-    kv_cache[1, :, : offset.item() + tokens.shape[-1], :] = v1
-    kv_cache[2, :, : offset.item() + tokens.shape[-1], :] = k2
-    kv_cache[3, :, : offset.item() + tokens.shape[-1], :] = v2
-    kv_cache[4, :, : offset.item() + tokens.shape[-1], :] = k3
-    kv_cache[5, :, : offset.item() + tokens.shape[-1], :] = v3
-    kv_cache[6, :, : offset.item() + tokens.shape[-1], :] = k4
-    kv_cache[7, :, : offset.item() + tokens.shape[-1], :] = v4
-    kv_cache[8, :, : offset.item() + tokens.shape[-1], :] = k5
-    kv_cache[9, :, : offset.item() + tokens.shape[-1], :] = v5
-    kv_cache[10, :, : offset.item() + tokens.shape[-1], :] = k6
-    kv_cache[11, :, : offset.item() + tokens.shape[-1], :] = v6
+    logits, kv_cache = output
 
     if not dynamic_kv_cache:
         return logits, kv_cache[:, :, :length, :]
