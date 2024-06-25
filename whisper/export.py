@@ -43,13 +43,11 @@ class DecoderModel(nn.Module):
         tokens,
         audio_features,
         kv_cache,
-        offset,
     ):
         return self.decoder(
             tokens,
             audio_features,
             kv_cache,
-            offset,
         )
 
 
@@ -72,38 +70,41 @@ def export_encoder(model, model_name):
     )
 
 
-def export_decoder(model, model_name):
+def export_decoder(model, model_name, n_text_layer):
     model = DecoderModel(model).eval()
 
     (
         tokens,
         audio_features,
         kv_cache,
-        offset,
     ) = (
         torch.zeros((1, 4), dtype=torch.int32),
         torch.rand((1, 1500, 512), dtype=torch.float32),
-        torch.zeros((12, 1, 451, 512), dtype=torch.float32),
-        torch.tensor(0),
+        torch.zeros((12, 1, 0, 512), dtype=torch.float32),
     )
     input_names = [
         "tokens",
         "audio_features",
         "kv_cache",
-        "offset",
     ]
     output_names = [
         "logits",
-        "output_kv_cache",
     ]
+
 
     dynamic_axes = {
         "tokens": {0: "batch_size", 1: "token_len"},
         "audio_features": {0: "batch_size"},
-        "kv_cache": {1: "batch_size"},
+        "kv_cache": {1: "batch_size", 2: "offset_len"},
         "logits": {0: "batch_size", 1: "token_len"},
-        "output_kv_cache": {1: "batch_size"},
     }
+
+    for i in range(n_text_layer):
+        output_names.append(f"output_k{i}")
+        output_names.append(f"output_v{i}")
+
+        dynamic_axes[f"output_k{i}"] = {1: "batch_size"}
+        dynamic_axes[f"output_v{i}"] = {1: "batch_size"}
 
     torch.onnx.export(
         model,
@@ -111,7 +112,6 @@ def export_decoder(model, model_name):
             tokens,
             audio_features,
             kv_cache,
-            offset,
         ),
         model_name,
         verbose=False,
@@ -183,17 +183,18 @@ def main() -> None:
     )
     decoder = decoder.eval()
 
-    export_encoder(
-        encoder,
-        os.path.join(
-            WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.onnx"
-        ),
-    )
+    # export_encoder(
+    #     encoder,
+    #     os.path.join(
+    #         WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.onnx"
+    #     ),
+    # )
     export_decoder(
         decoder,
         os.path.join(
             WEIGHTS_DIR, f"{args.model_type.value}_{DECODER_NAME}.onnx"
         ),
+        dims.n_text_layer,
     )
 
 

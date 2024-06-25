@@ -7,10 +7,10 @@ import numpy as np
 import onnxruntime
 import tqdm
 
-from src.audio import SAMPLE_RATE  # CHUNK_LENGTH,
 from src.audio import (
     HOP_LENGTH,
     N_FRAMES,
+    SAMPLE_RATE,  # CHUNK_LENGTH,
     load_audio,
     log_mel_spectrogram,
     pad_or_trim,
@@ -162,19 +162,19 @@ def get_audio_features(enc_net, mel):
 
 
 def new_kv_cache(n_group: int, length: int = 451) -> np.ndarray:
-    model_type = args.model_type
-    if model_type == "tiny.en" or model_type == "tiny":
-        size = [8, n_group, length, 384]
-    elif model_type == "base.en" or model_type == "base":
-        size = [12, n_group, length, 512]
-    elif model_type == "small.en" or model_type == "small":
-        size = [24, n_group, length, 768]
-    elif model_type == "medium.en" or model_type == "medium":
-        size = [48, n_group, length, 1024]
-    elif model_type == "large":
-        size = [64, n_group, length, 1280]
-    else:
-        raise ValueError(f"Unsupported model type: {model_type}")
+    # model_type = args.model_type
+    # if model_type == "tiny.en" or model_type == "tiny":
+    #     size = [8, n_group, length, 384]
+    # elif model_type == "base.en" or model_type == "base":
+    #     size = [12, n_group, length, 512]
+    # elif model_type == "small.en" or model_type == "small":
+    #     size = [24, n_group, length, 768]
+    # elif model_type == "medium.en" or model_type == "medium":
+    #     size = [48, n_group, length, 1024]
+    # elif model_type == "large":
+    #     size = [64, n_group, length, 1280]
+    # else:
+    #     raise ValueError(f"Unsupported model type: {model_type}")
     size = [12, n_group, length, 512]
     return np.zeros(size, dtype=np.float32, order="C")
 
@@ -215,18 +215,29 @@ def inference_logits(
         tokens = tokens[:, -1:]
 
     tokens = tokens.astype(np.int32)
-    offset = np.array(offset, dtype=np.int64)
+    offset = np.array(offset, dtype=np.int32)
     kv_cache = kv_cache.astype(np.float32)
     output = dec_net.run(
         None,
         {
             "tokens": tokens,
             "audio_features": audio_features,
-            "kv_cache": kv_cache,
-            "offset": offset,
+            "kv_cache": kv_cache[:,:,:offset.item(),:],
         },
     )
-    logits, kv_cache = output
+    logits, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6 = output
+    kv_cache[0, :,: offset.item() + tokens.shape[-1], :] = k1
+    kv_cache[1, :,: offset.item() + tokens.shape[-1], :] = v1
+    kv_cache[2, :,: offset.item() + tokens.shape[-1], :] = k2
+    kv_cache[3, :,: offset.item() + tokens.shape[-1], :] = v2
+    kv_cache[4, :,: offset.item() + tokens.shape[-1], :] = k3
+    kv_cache[5, :,: offset.item() + tokens.shape[-1], :] = v3
+    kv_cache[6, :,: offset.item() + tokens.shape[-1], :] = k4
+    kv_cache[7, :,: offset.item() + tokens.shape[-1], :] = v4
+    kv_cache[8, :,: offset.item() + tokens.shape[-1], :] = k5
+    kv_cache[9, :,: offset.item() + tokens.shape[-1], :] = v5
+    kv_cache[10, :,: offset.item() + tokens.shape[-1], :] = k6
+    kv_cache[11, :,: offset.item() + tokens.shape[-1], :] = v6
 
     if not dynamic_kv_cache:
         return logits, kv_cache[:, :, :length, :]

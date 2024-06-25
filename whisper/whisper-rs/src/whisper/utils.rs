@@ -1,4 +1,4 @@
-use ndarray::{Array4, Dim};
+use ndarray::{Array3, Dim};
 
 #[derive(Debug)]
 pub struct Options {
@@ -19,16 +19,16 @@ impl Options {
 
 #[derive(Debug, Clone)]
 pub struct KVCache {
-    pub kv_cache: Array4<f32>,
+    pub value: Vec<Array3<f32>>,
 }
 
 impl KVCache {
     pub fn default(n_ctx: usize) -> KVCache {
-        let shape = Dim([12, 1, 451, n_ctx]);
-        let value: Array4<f32> = Array4::zeros(shape);
+        let shape = Dim([1, 0, n_ctx]);
+        let value: Array3<f32> = Array3::zeros(shape);
 
         KVCache {
-            kv_cache: value.clone(),
+            value: vec![value; 12],
         }
     }
 }
