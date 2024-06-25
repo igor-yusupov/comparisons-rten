@@ -187,7 +187,7 @@ class TextDecoder(nn.Module):
         self,
         tokens: Tensor,
         xa: Tensor,
-        kv_cache: Tensor,
+        *kv_cache,
     ):
         """
         x : torch.LongTensor, shape = (batch_size, <= n_ctx)
@@ -196,7 +196,7 @@ class TextDecoder(nn.Module):
             the encoded audio features to be attended on
         """
         # minus one because we pre allocate kv_cache
-        offset = kv_cache.shape[2]
+        offset = kv_cache[0].shape[1]
         x = (
             self.token_embedding(tokens)
             + self.positional_embedding[offset : offset + tokens.shape[-1]]

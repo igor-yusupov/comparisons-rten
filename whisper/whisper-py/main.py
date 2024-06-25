@@ -217,13 +217,20 @@ def inference_logits(
     tokens = tokens.astype(np.int32)
     offset = np.array(offset, dtype=np.int32)
     kv_cache = kv_cache.astype(np.float32)
+    input_dict = {
+        "tokens": tokens,
+        "audio_features": audio_features,
+    }
+
+    for i in range(len(kv_cache)):
+        if i % 2 == 0:
+            input_dict[f"k{i // 2}"] = kv_cache[i][:,:offset.item(),:]
+        else:
+            input_dict[f"v{i // 2}"] = kv_cache[i][:,:offset.item(),:]
+
     output = dec_net.run(
         None,
-        {
-            "tokens": tokens,
-            "audio_features": audio_features,
-            "kv_cache": kv_cache[:,:,:offset.item(),:],
-        },
+        input_dict,
     )
     logits, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6 = output
     kv_cache[0, :,: offset.item() + tokens.shape[-1], :] = k1

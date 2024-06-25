@@ -42,12 +42,12 @@ class DecoderModel(nn.Module):
         self,
         tokens,
         audio_features,
-        kv_cache,
+        *kv_cache,
     ):
         return self.decoder(
             tokens,
             audio_features,
-            kv_cache,
+            *kv_cache,
         )
 
 
@@ -76,16 +76,16 @@ def export_decoder(model, model_name, n_text_layer):
     (
         tokens,
         audio_features,
-        kv_cache,
+        kv,
     ) = (
         torch.zeros((1, 4), dtype=torch.int32),
         torch.rand((1, 1500, 512), dtype=torch.float32),
-        torch.zeros((12, 1, 0, 512), dtype=torch.float32),
+        torch.zeros((1, 0, 512), dtype=torch.float32),
     )
+    kv_cache = [kv] * n_text_layer * 2
     input_names = [
         "tokens",
         "audio_features",
-        "kv_cache",
     ]
     output_names = [
         "logits",
@@ -95,14 +95,17 @@ def export_decoder(model, model_name, n_text_layer):
     dynamic_axes = {
         "tokens": {0: "batch_size", 1: "token_len"},
         "audio_features": {0: "batch_size"},
-        "kv_cache": {1: "batch_size", 2: "offset_len"},
         "logits": {0: "batch_size", 1: "token_len"},
     }
 
     for i in range(n_text_layer):
+        input_names.append(f"k{i}")
+        input_names.append(f"v{i}")
         output_names.append(f"output_k{i}")
         output_names.append(f"output_v{i}")
 
+        dynamic_axes[f"k{i}"] = {0: "batch_size", 1: "offset_len"}
+        dynamic_axes[f"v{i}"] = {0: "batch_size", 1: "offset_len"}
         dynamic_axes[f"output_k{i}"] = {1: "batch_size"}
         dynamic_axes[f"output_v{i}"] = {1: "batch_size"}
 
@@ -111,7 +114,7 @@ def export_decoder(model, model_name, n_text_layer):
         (
             tokens,
             audio_features,
-            kv_cache,
+            *kv_cache,
         ),
         model_name,
         verbose=False,

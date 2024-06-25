@@ -4,10 +4,9 @@ mod utils;
 
 use audio::{get_mel_filteres, read_audio};
 use ndarray::{
-    concatenate, s, stack, Array, Array2, Array3, ArrayView, ArrayView2, ArrayView3, Axis, Dim,
-    Dimension, Ix, StrideShape,
+    concatenate, s, Array, Array2, Array3, ArrayView, ArrayView2, ArrayView3, Axis, Dim, Dimension,
+    Ix, StrideShape,
 };
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rten::{Input, Model, NodeId, Output};
 use rten_tensor::prelude::*;
 use rten_tensor::{NdTensor, NdTensorView};
@@ -263,9 +262,20 @@ impl Recognition for Whisper {
         };
 
         let tokens_id = self.decoder.node_id("tokens").unwrap();
-        let kv_cache_id = self.decoder.node_id("kv_cache").unwrap();
+        let k0_id = self.decoder.node_id("k0").unwrap();
+        let v0_id = self.decoder.node_id("v0").unwrap();
+        let k1_id = self.decoder.node_id("k1").unwrap();
+        let v1_id = self.decoder.node_id("v1").unwrap();
+        let k2_id = self.decoder.node_id("k2").unwrap();
+        let v2_id = self.decoder.node_id("v2").unwrap();
+        let k3_id = self.decoder.node_id("k3").unwrap();
+        let v3_id = self.decoder.node_id("v3").unwrap();
+        let k4_id = self.decoder.node_id("k4").unwrap();
+        let v4_id = self.decoder.node_id("v4").unwrap();
+        let k5_id = self.decoder.node_id("k5").unwrap();
+        let v5_id = self.decoder.node_id("v5").unwrap();
 
-        let logits = self.decoder.node_id("logits").unwrap();
+        let logits_id = self.decoder.node_id("logits").unwrap();
         let output_k0_id = self.decoder.node_id("output_k0").unwrap();
         let output_v0_id = self.decoder.node_id("output_v0").unwrap();
         let output_k1_id = self.decoder.node_id("output_k1").unwrap();
@@ -280,20 +290,35 @@ impl Recognition for Whisper {
         let output_v5_id = self.decoder.node_id("output_v5").unwrap();
 
         let tokens = as_ndtensor_view(tokens.view()).unwrap();
-        let kv_cache = stack(
-            Axis(0),
-            &kv_cache
-                .value
-                .par_iter()
-                .map(|a| a.view())
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
-        let kv_cache = as_ndtensor_view(kv_cache.view()).unwrap();
+        let k1 = as_ndtensor_view(kv_cache.k1.view()).unwrap();
+        let v1 = as_ndtensor_view(kv_cache.v1.view()).unwrap();
+        let k2 = as_ndtensor_view(kv_cache.k2.view()).unwrap();
+        let v2 = as_ndtensor_view(kv_cache.v2.view()).unwrap();
+        let k3 = as_ndtensor_view(kv_cache.k3.view()).unwrap();
+        let v3 = as_ndtensor_view(kv_cache.v3.view()).unwrap();
+        let k4 = as_ndtensor_view(kv_cache.k4.view()).unwrap();
+        let v4 = as_ndtensor_view(kv_cache.v4.view()).unwrap();
+        let k5 = as_ndtensor_view(kv_cache.k5.view()).unwrap();
+        let v5 = as_ndtensor_view(kv_cache.v5.view()).unwrap();
+        let k6 = as_ndtensor_view(kv_cache.k6.view()).unwrap();
+        let v6 = as_ndtensor_view(kv_cache.v6.view()).unwrap();
 
         // Add the inputs which change on each decoder iteration.
-        let mut inputs: Vec<(NodeId, Input)> =
-            vec![(tokens_id, tokens.into()), (kv_cache_id, kv_cache.into())];
+        let mut inputs: Vec<(NodeId, Input)> = vec![
+            (tokens_id, tokens.into()),
+            (k0_id, k1.into()),
+            (v0_id, v1.into()),
+            (k1_id, k2.into()),
+            (v1_id, v2.into()),
+            (k2_id, k3.into()),
+            (v2_id, v3.into()),
+            (k3_id, k4.into()),
+            (v3_id, v4.into()),
+            (k4_id, k5.into()),
+            (v4_id, v5.into()),
+            (k5_id, k6.into()),
+            (v5_id, v6.into()),
+        ];
 
         // Add the inputs which are constant while decoding a chunk of audio.
         inputs.extend(
@@ -307,7 +332,7 @@ impl Recognition for Whisper {
             .run_n(
                 &inputs,
                 [
-                    logits,
+                    logits_id,
                     output_k0_id,
                     output_v0_id,
                     output_k1_id,
@@ -359,7 +384,18 @@ impl Recognition for Whisper {
         let v6 = into_array(v6);
 
         let new_kv_cache = KVCache {
-            value: vec![k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6],
+            k1,
+            k2,
+            k3,
+            k4,
+            k5,
+            k6,
+            v1,
+            v2,
+            v3,
+            v4,
+            v5,
+            v6,
         };
 
         (logits, new_kv_cache)
@@ -377,7 +413,7 @@ impl Whisper {
         let decoder = Model::load_file(decoder_path).unwrap();
         let tokenizer = Tokenizer::new(tokenizer_path);
         let mel_filters = get_mel_filteres(mel_filters_path);
-        let options = Options::new();
+        let options = Options::new(6);
 
         Whisper {
             encoder,
