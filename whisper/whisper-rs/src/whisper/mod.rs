@@ -262,63 +262,29 @@ impl Recognition for Whisper {
         };
 
         let tokens_id = self.decoder.node_id("tokens").unwrap();
-        let k0_id = self.decoder.node_id("k0").unwrap();
-        let v0_id = self.decoder.node_id("v0").unwrap();
-        let k1_id = self.decoder.node_id("k1").unwrap();
-        let v1_id = self.decoder.node_id("v1").unwrap();
-        let k2_id = self.decoder.node_id("k2").unwrap();
-        let v2_id = self.decoder.node_id("v2").unwrap();
-        let k3_id = self.decoder.node_id("k3").unwrap();
-        let v3_id = self.decoder.node_id("v3").unwrap();
-        let k4_id = self.decoder.node_id("k4").unwrap();
-        let v4_id = self.decoder.node_id("v4").unwrap();
-        let k5_id = self.decoder.node_id("k5").unwrap();
-        let v5_id = self.decoder.node_id("v5").unwrap();
-
-        let logits_id = self.decoder.node_id("logits").unwrap();
-        let output_k0_id = self.decoder.node_id("output_k0").unwrap();
-        let output_v0_id = self.decoder.node_id("output_v0").unwrap();
-        let output_k1_id = self.decoder.node_id("output_k1").unwrap();
-        let output_v1_id = self.decoder.node_id("output_v1").unwrap();
-        let output_k2_id = self.decoder.node_id("output_k2").unwrap();
-        let output_v2_id = self.decoder.node_id("output_v2").unwrap();
-        let output_k3_id = self.decoder.node_id("output_k3").unwrap();
-        let output_v3_id = self.decoder.node_id("output_v3").unwrap();
-        let output_k4_id = self.decoder.node_id("output_k4").unwrap();
-        let output_v4_id = self.decoder.node_id("output_v4").unwrap();
-        let output_k5_id = self.decoder.node_id("output_k5").unwrap();
-        let output_v5_id = self.decoder.node_id("output_v5").unwrap();
-
         let tokens = as_ndtensor_view(tokens.view()).unwrap();
-        let k1 = as_ndtensor_view(kv_cache.k1.view()).unwrap();
-        let v1 = as_ndtensor_view(kv_cache.v1.view()).unwrap();
-        let k2 = as_ndtensor_view(kv_cache.k2.view()).unwrap();
-        let v2 = as_ndtensor_view(kv_cache.v2.view()).unwrap();
-        let k3 = as_ndtensor_view(kv_cache.k3.view()).unwrap();
-        let v3 = as_ndtensor_view(kv_cache.v3.view()).unwrap();
-        let k4 = as_ndtensor_view(kv_cache.k4.view()).unwrap();
-        let v4 = as_ndtensor_view(kv_cache.v4.view()).unwrap();
-        let k5 = as_ndtensor_view(kv_cache.k5.view()).unwrap();
-        let v5 = as_ndtensor_view(kv_cache.v5.view()).unwrap();
-        let k6 = as_ndtensor_view(kv_cache.k6.view()).unwrap();
-        let v6 = as_ndtensor_view(kv_cache.v6.view()).unwrap();
 
         // Add the inputs which change on each decoder iteration.
-        let mut inputs: Vec<(NodeId, Input)> = vec![
-            (tokens_id, tokens.into()),
-            (k0_id, k1.into()),
-            (v0_id, v1.into()),
-            (k1_id, k2.into()),
-            (v1_id, v2.into()),
-            (k2_id, k3.into()),
-            (v2_id, v3.into()),
-            (k3_id, k4.into()),
-            (v3_id, v4.into()),
-            (k4_id, k5.into()),
-            (v4_id, v5.into()),
-            (k5_id, k6.into()),
-            (v5_id, v6.into()),
-        ];
+        let mut inputs: Vec<(NodeId, Input)> = vec![(tokens_id, tokens.into())];
+
+        // Add the inputs of kv_cache
+        inputs.extend((0..kv_cache.value.len()).map(|idx| {
+            if idx % 2 == 0 {
+                (
+                    self.decoder
+                        .node_id(format!("k{}", idx / 2).as_str())
+                        .unwrap(),
+                    as_ndtensor_view(kv_cache.value[idx].view()).unwrap().into(),
+                )
+            } else {
+                (
+                    self.decoder
+                        .node_id(format!("v{}", idx / 2).as_str())
+                        .unwrap(),
+                    as_ndtensor_view(kv_cache.value[idx].view()).unwrap().into(),
+                )
+            }
+        }));
 
         // Add the inputs which are constant while decoding a chunk of audio.
         inputs.extend(
@@ -327,75 +293,39 @@ impl Recognition for Whisper {
                 .map(|(node_id, output)| (*node_id, output.into())),
         );
 
-        let [logits, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6] = self
+        let logits_id = self.decoder.node_id("logits").unwrap();
+
+        let mut outputs: Vec<NodeId> = vec![logits_id];
+        outputs.extend((0..kv_cache.value.len()).map(|idx| {
+            if idx % 2 == 0 {
+                self.decoder
+                    .node_id(format!("output_k{}", idx / 2).as_str())
+                    .unwrap()
+            } else {
+                self.decoder
+                    .node_id(format!("output_v{}", idx / 2).as_str())
+                    .unwrap()
+            }
+        }));
+        let result: [rten::Output; 13] = self
             .decoder
-            .run_n(
-                &inputs,
-                [
-                    logits_id,
-                    output_k0_id,
-                    output_v0_id,
-                    output_k1_id,
-                    output_v1_id,
-                    output_k2_id,
-                    output_v2_id,
-                    output_k3_id,
-                    output_v3_id,
-                    output_k4_id,
-                    output_v4_id,
-                    output_k5_id,
-                    output_v5_id,
-                ],
-                None,
-            )
+            .run_n(&inputs, outputs.try_into().unwrap(), None)
             .unwrap();
 
-        let logits: NdTensor<f32, 3> = logits.try_into().unwrap();
+        let (logits, kv_cache) = result.split_at(1);
+
+        let logits: NdTensor<f32, 3> = logits[0].clone().try_into().unwrap();
         let logits = into_array(logits);
 
-        let k1: NdTensor<f32, 3> = k1.try_into().unwrap();
-        let k1 = into_array(k1);
-        let v1: NdTensor<f32, 3> = v1.try_into().unwrap();
-        let v1 = into_array(v1);
-
-        let k2: NdTensor<f32, 3> = k2.try_into().unwrap();
-        let k2 = into_array(k2);
-        let v2: NdTensor<f32, 3> = v2.try_into().unwrap();
-        let v2 = into_array(v2);
-
-        let k3: NdTensor<f32, 3> = k3.try_into().unwrap();
-        let k3 = into_array(k3);
-        let v3: NdTensor<f32, 3> = v3.try_into().unwrap();
-        let v3 = into_array(v3);
-
-        let k4: NdTensor<f32, 3> = k4.try_into().unwrap();
-        let k4 = into_array(k4);
-        let v4: NdTensor<f32, 3> = v4.try_into().unwrap();
-        let v4 = into_array(v4);
-
-        let k5: NdTensor<f32, 3> = k5.try_into().unwrap();
-        let k5 = into_array(k5);
-        let v5: NdTensor<f32, 3> = v5.try_into().unwrap();
-        let v5 = into_array(v5);
-
-        let k6: NdTensor<f32, 3> = k6.try_into().unwrap();
-        let k6 = into_array(k6);
-        let v6: NdTensor<f32, 3> = v6.try_into().unwrap();
-        let v6 = into_array(v6);
-
         let new_kv_cache = KVCache {
-            k1,
-            k2,
-            k3,
-            k4,
-            k5,
-            k6,
-            v1,
-            v2,
-            v3,
-            v4,
-            v5,
-            v6,
+            value: kv_cache
+                .to_vec()
+                .into_iter()
+                .map(|element| {
+                    let element: NdTensor<f32, 3> = element.try_into().unwrap();
+                    into_array(element)
+                })
+                .collect(),
         };
 
         (logits, new_kv_cache)
