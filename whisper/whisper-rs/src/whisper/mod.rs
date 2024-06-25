@@ -307,10 +307,7 @@ impl Recognition for Whisper {
                     .unwrap()
             }
         }));
-        let result: [rten::Output; 13] = self
-            .decoder
-            .run_n(&inputs, outputs.try_into().unwrap(), None)
-            .unwrap();
+        let result = self.decoder.run(&inputs, &outputs, None).unwrap();
 
         let (logits, kv_cache) = result.split_at(1);
 
