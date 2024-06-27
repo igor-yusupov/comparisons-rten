@@ -39,12 +39,19 @@ where
     Array::from_shape_vec(shape, data).unwrap()
 }
 
+pub enum WhisperVersion {
+    Tiny,
+    Base,
+    Small,
+}
+
 pub struct Whisper {
     encoder: Model,
     decoder: Model,
     tokenizer: Tokenizer,
     mel_filters: Array2<f32>,
     options: Options,
+    version: WhisperVersion,
 }
 
 impl fmt::Debug for Whisper {
@@ -245,7 +252,11 @@ impl Recognition for Whisper {
     }
 
     fn get_default_kvcache(&self) -> KVCache {
-        KVCache::default(512)
+        match self.version {
+            WhisperVersion::Tiny => KVCache::default(384, 8),
+            WhisperVersion::Base => KVCache::default(512, 12),
+            WhisperVersion::Small => KVCache::default(768, 24),
+        }
     }
 
     fn inference_logits(
@@ -335,12 +346,13 @@ impl Whisper {
         decoder_path: &str,
         tokenizer_path: &str,
         mel_filters_path: &str,
+        version: WhisperVersion,
     ) -> Whisper {
         let encoder = Model::load_file(encoder_path).unwrap();
         let decoder = Model::load_file(decoder_path).unwrap();
         let tokenizer = Tokenizer::new(tokenizer_path);
         let mel_filters = get_mel_filteres(mel_filters_path);
-        let options = Options::new(6);
+        let options = Options::new();
 
         Whisper {
             encoder,
@@ -348,6 +360,7 @@ impl Whisper {
             tokenizer,
             mel_filters,
             options,
+            version,
         }
     }
 

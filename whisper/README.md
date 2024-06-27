@@ -1,16 +1,14 @@
 ## Quick start
 
-Download [weights](https://www.dropbox.com/scl/fi/8efloh7muvcevgq1sqd7f/weights.zip?rlkey=bkcnd2la49bx0uqfarv1nzp28&dl=1) and [example audio file](https://www.dropbox.com/scl/fi/8yzo8y2ptxoy0rfuon9bu/audio.wav?rlkey=dorb43edb48bqpx5cgrtckxlk&dl=1). Unzip weights.zip to whisper directory, create "data" directory and put audio there.
-
 ### Export weights
 ```
-python3 export.py
+python3 export.py --model_type {tiny, base or small}
 ```
 
 ```
 cd weights
-rten-convert base_encoder.rten
-rten-convert base_decoder.rten
+rten-convert {encoder_name}
+rten-convert {decoder_name}
 ```
 
 ### Run rust code:
@@ -18,7 +16,7 @@ rten-convert base_decoder.rten
 ```
 cd whisper-rs
 
-cargo run --release
+cargo run --release {tiny, base, small}
 ```
 
 ### Run python code:
@@ -26,13 +24,5 @@ cargo run --release
 ```
 cd whisper-py
 
-python3 main.py
-```
-
-### Run python code with quant models:
-
-```
-cd whisper-py
-
-python3 main.py --quant
+python3 main.py --model_type {tiny, base or small}
 ```

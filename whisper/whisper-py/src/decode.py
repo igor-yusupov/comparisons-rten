@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.special import log_softmax, logsumexp
-
 from src.utils import softmax
 
 

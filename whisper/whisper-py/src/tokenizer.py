@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
 import tiktoken
-
 from src.languages import LANGUAGES, TO_LANGUAGE_CODE
 
 

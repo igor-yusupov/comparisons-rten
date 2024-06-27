@@ -6,11 +6,10 @@ from enum import Enum
 
 import torch
 import torch.nn as nn
-
-import whisper
 from src.decoder import TextDecoder
 from src.encoder import AudioEncoder
 
+import whisper
 
 WEIGHTS_DIR = "weights"
 ENCODER_NAME = "encoder"
@@ -70,7 +69,7 @@ def export_encoder(model, model_name):
     )
 
 
-def export_decoder(model, model_name, n_text_layer):
+def export_decoder(model, model_name, n_text_layer, n_text_state):
     model = DecoderModel(model).eval()
 
     (
@@ -79,8 +78,8 @@ def export_decoder(model, model_name, n_text_layer):
         kv,
     ) = (
         torch.zeros((1, 4), dtype=torch.int32),
-        torch.rand((1, 1500, 512), dtype=torch.float32),
-        torch.zeros((1, 0, 512), dtype=torch.float32),
+        torch.rand((1, 1500, n_text_state), dtype=torch.float32),
+        torch.zeros((1, 0, n_text_state), dtype=torch.float32),
     )
     kv_cache = [kv] * n_text_layer * 2
     input_names = [
@@ -90,7 +89,6 @@ def export_decoder(model, model_name, n_text_layer):
     output_names = [
         "logits",
     ]
-
 
     dynamic_axes = {
         "tokens": {0: "batch_size", 1: "token_len"},
@@ -186,18 +184,19 @@ def main() -> None:
     )
     decoder = decoder.eval()
 
-    # export_encoder(
-    #     encoder,
-    #     os.path.join(
-    #         WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.onnx"
-    #     ),
-    # )
+    export_encoder(
+        encoder,
+        os.path.join(
+            WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.onnx"
+        ),
+    )
     export_decoder(
         decoder,
         os.path.join(
             WEIGHTS_DIR, f"{args.model_type.value}_{DECODER_NAME}.onnx"
         ),
         dims.n_text_layer,
+        dims.n_text_state,
     )
 
 
