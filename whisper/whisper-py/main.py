@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 import typing as t
 from collections import namedtuple
@@ -6,11 +7,10 @@ from collections import namedtuple
 import numpy as np
 import onnxruntime
 import tqdm
-
+from src.audio import SAMPLE_RATE  # CHUNK_LENGTH,
 from src.audio import (
     HOP_LENGTH,
     N_FRAMES,
-    SAMPLE_RATE,  # CHUNK_LENGTH,
     load_audio,
     log_mel_spectrogram,
     pad_or_trim,
@@ -24,13 +24,12 @@ from src.decode import (
 from src.tokenizer import get_tokenizer
 from src.utils import softmax
 
-WEIGHT_ENC_PATH = "../weights/encoder.onnx"
-WEIGHT_DEC_PATH = "../weights/decoder.onnx"
+WEIGHTS_DIR = "../weights"
+WEIGHT_ENC_PATH = ""
+WEIGHT_DEC_PATH = ""
 
-WEIGHT_ENC_QUANT_PATH = "../weights/encoder_quant.onnx"
-WEIGHT_DEC_QUANT_PATH = "../weights/decoder_quant.onnx"
-
-POSITIONAL_EMB = np.load("../weights/positional_embedding.npz")["pos_emb"]
+# WEIGHT_ENC_QUANT_PATH = "../weights/encoder_quant.onnx"
+# WEIGHT_DEC_QUANT_PATH = "../weights/decoder_quant.onnx"
 
 AUDIO_PATH = "../data/audio.wav"
 
@@ -164,20 +163,19 @@ def get_audio_features(enc_net, mel):
 
 
 def new_kv_cache(n_group: int, length: int = 451) -> np.ndarray:
-    # model_type = args.model_type
-    # if model_type == "tiny.en" or model_type == "tiny":
-    #     size = [8, n_group, length, 384]
-    # elif model_type == "base.en" or model_type == "base":
-    #     size = [12, n_group, length, 512]
-    # elif model_type == "small.en" or model_type == "small":
-    #     size = [24, n_group, length, 768]
+    model_type = args.model_type
+    if model_type == "tiny.en" or model_type == "tiny":
+        size = [8, n_group, length, 384]
+    elif model_type == "base.en" or model_type == "base":
+        size = [12, n_group, length, 512]
+    elif model_type == "small.en" or model_type == "small":
+        size = [24, n_group, length, 768]
     # elif model_type == "medium.en" or model_type == "medium":
     #     size = [48, n_group, length, 1024]
     # elif model_type == "large":
     #     size = [64, n_group, length, 1280]
-    # else:
-    #     raise ValueError(f"Unsupported model type: {model_type}")
-    size = [12, n_group, length, 512]
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
     return np.zeros(size, dtype=np.float32, order="C")
 
 
@@ -219,41 +217,26 @@ def inference_logits(
     tokens = tokens.astype(np.int32)
     offset = np.array(offset, dtype=np.int32)
     kv_cache = kv_cache.astype(np.float32)
-    pos_emb = POSITIONAL_EMB[offset.item(): offset.item() + tokens.shape[-1]]
-    pos_emb = np.expand_dims(pos_emb, axis=0)
+    input_dict = {
+        "tokens": tokens,
+        "audio_features": audio_features,
+    }
+
+    for i in range(len(kv_cache)):
+        if i % 2 == 0:
+            input_dict[f"k{i // 2}"] = kv_cache[i][:, : offset.item(), :]
+        else:
+            input_dict[f"v{i // 2}"] = kv_cache[i][:, : offset.item(), :]
+
     output = dec_net.run(
         None,
-        {
-            "tokens": tokens,
-            "audio_features": audio_features,
-            "pos_emb": pos_emb,
-            "k1": kv_cache[0][:,:offset.item(),:],
-            "v1": kv_cache[1][:,:offset.item(),:],
-            "k2": kv_cache[2][:,:offset.item(),:],
-            "v2": kv_cache[3][:,:offset.item(),:],
-            "k3": kv_cache[4][:,:offset.item(),:],
-            "v3": kv_cache[5][:,:offset.item(),:],
-            "k4": kv_cache[6][:,:offset.item(),:],
-            "v4": kv_cache[7][:,:offset.item(),:],
-            "k5": kv_cache[8][:,:offset.item(),:],
-            "v5": kv_cache[9][:,:offset.item(),:],
-            "k6": kv_cache[10][:,:offset.item(),:],
-            "v6": kv_cache[11][:,:offset.item(),:],
-        },
+        input_dict,
     )
-    logits, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6 = output
-    kv_cache[0, :,: offset.item() + tokens.shape[-1], :] = k1
-    kv_cache[1, :,: offset.item() + tokens.shape[-1], :] = v1
-    kv_cache[2, :,: offset.item() + tokens.shape[-1], :] = k2
-    kv_cache[3, :,: offset.item() + tokens.shape[-1], :] = v2
-    kv_cache[4, :,: offset.item() + tokens.shape[-1], :] = k3
-    kv_cache[5, :,: offset.item() + tokens.shape[-1], :] = v3
-    kv_cache[6, :,: offset.item() + tokens.shape[-1], :] = k4
-    kv_cache[7, :,: offset.item() + tokens.shape[-1], :] = v4
-    kv_cache[8, :,: offset.item() + tokens.shape[-1], :] = k5
-    kv_cache[9, :,: offset.item() + tokens.shape[-1], :] = v5
-    kv_cache[10, :,: offset.item() + tokens.shape[-1], :] = k6
-    kv_cache[11, :,: offset.item() + tokens.shape[-1], :] = v6
+    logits = output[0]
+    output_cache = output[1:]
+
+    for i, el in enumerate(output_cache):
+        kv_cache[i, :, : offset.item() + tokens.shape[-1], :] = el
 
     if not dynamic_kv_cache:
         return logits, kv_cache[:, :, :length, :]
@@ -616,20 +599,33 @@ def main(args: argparse.Namespace) -> None:
     providers = ["CPUExecutionProvider"]
     # providers = ["CUDAExecutionProvider"]
 
-    if args.quant:
-        enc_net = onnxruntime.InferenceSession(
-            WEIGHT_ENC_QUANT_PATH, providers=providers
-        )
-        dec_net = onnxruntime.InferenceSession(
-            WEIGHT_DEC_QUANT_PATH, providers=providers
-        )
-    else:
-        enc_net = onnxruntime.InferenceSession(
-            WEIGHT_ENC_PATH, providers=providers
-        )
-        dec_net = onnxruntime.InferenceSession(
-            WEIGHT_DEC_PATH, providers=providers
-        )
+    # if args.quant:
+    #     enc_net = onnxruntime.InferenceSession(
+    #         WEIGHT_ENC_QUANT_PATH, providers=providers
+    #     )
+    #     dec_net = onnxruntime.InferenceSession(
+    #         WEIGHT_DEC_QUANT_PATH, providers=providers
+    #     )
+    # else:
+
+    global WEIGHT_ENC_PATH, WEIGHT_DEC_PATH
+    model_type = args.model_type
+    if model_type == "tiny.en" or model_type == "tiny":
+        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "tiny_encoder.onnx")
+        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "tiny_decoder.onnx")
+    elif model_type == "base.en" or model_type == "base":
+        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "base_encoder.onnx")
+        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "base_decoder.onnx")
+    elif model_type == "small.en" or model_type == "small":
+        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "small_encoder.onnx")
+        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "small_decoder.onnx")
+
+    enc_net = onnxruntime.InferenceSession(
+        WEIGHT_ENC_PATH, providers=providers
+    )
+    dec_net = onnxruntime.InferenceSession(
+        WEIGHT_DEC_PATH, providers=providers
+    )
 
     result = recognize_from_audio(enc_net, dec_net)
 
@@ -638,6 +634,11 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--quant', action='store_true', help='Use quant models')
+    # parser.add_argument(
+    #     "--quant", action="store_true", help="Use quant models"
+    # )
+    parser.add_argument(
+        "--model_type", default="base", type=str, help="Use quant models"
+    )
     args = parser.parse_args()
     main(args)
