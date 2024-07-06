@@ -43,13 +43,13 @@ class MultiHeadAttention(nn.Module):
         self.key = nn.Linear(n_state, n_state, bias=False)
         self.value = nn.Linear(n_state, n_state)
         self.out = nn.Linear(n_state, n_state)
+        self.n_state = n_state
 
     def forward(
         self,
         x: Tensor,
     ):
         q = self.query(x)
-
         k = self.key(x)
         v = self.value(x)
 
@@ -57,8 +57,7 @@ class MultiHeadAttention(nn.Module):
         return self.out(wv)
 
     def qkv_attention(self, q: Tensor, k: Tensor, v: Tensor):
-        _, _, n_state = q.shape
-        scale = (n_state // self.n_head) ** -0.25
+        scale = (self.n_state // self.n_head) ** -0.25
         q = q.view(*q.shape[:2], self.n_head, -1).permute(0, 2, 1, 3) * scale
         k = k.view(*k.shape[:2], self.n_head, -1).permute(0, 2, 3, 1) * scale
         v = v.view(*v.shape[:2], self.n_head, -1).permute(0, 2, 1, 3)
