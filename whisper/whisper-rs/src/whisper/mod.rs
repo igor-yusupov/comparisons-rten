@@ -7,7 +7,7 @@ use ndarray::{
     concatenate, s, Array, Array2, Array3, ArrayView, ArrayView2, ArrayView3, Axis, Dim, Dimension,
     Ix, StrideShape,
 };
-use rten::{Input, Model, NodeId, Output};
+use rten::{InputOrOutput, Model, NodeId, Output};
 use rten_tensor::prelude::*;
 use rten_tensor::{NdTensor, NdTensorView};
 use std::fmt;
@@ -146,7 +146,7 @@ trait Recognition {
         let audio_features_tensor = as_ndtensor_view(audio_features.view()).unwrap();
         let decoder_inputs = decoder
             .partial_run(
-                &[(audio_features_id, audio_features_tensor.into())],
+                vec![(audio_features_id, audio_features_tensor.into())],
                 &[logits_id],
                 None,
             )
@@ -276,7 +276,7 @@ impl Recognition for Whisper {
         let tokens = as_ndtensor_view(tokens.view()).unwrap();
 
         // Add the inputs which change on each decoder iteration.
-        let mut inputs: Vec<(NodeId, Input)> = vec![(tokens_id, tokens.into())];
+        let mut inputs: Vec<(NodeId, InputOrOutput)> = vec![(tokens_id, tokens.into())];
 
         // Add the inputs of kv_cache
         inputs.extend((0..kv_cache.value.len()).map(|idx| {
@@ -318,7 +318,7 @@ impl Recognition for Whisper {
                     .unwrap()
             }
         }));
-        let result = self.decoder.run(&inputs, &outputs, None).unwrap();
+        let result = self.decoder.run(inputs, &outputs, None).unwrap();
 
         let (logits, kv_cache) = result.split_at(1);
 
