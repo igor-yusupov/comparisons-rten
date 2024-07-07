@@ -12,7 +12,7 @@ use rten_tensor::prelude::*;
 use rten_tensor::{NdTensor, NdTensorView};
 use std::fmt;
 use tokenizers::Tokenizer;
-use utils::{KVCache, Options};
+use utils::Options;
 
 /// Convert an ndarray view into an RTen NdTensorView.
 fn as_ndtensor_view<'a, T, const N: usize>(
@@ -90,21 +90,35 @@ impl Whisper {
         self.run(mel, language)
     }
 
-    fn get_default_kvcache(&self) -> KVCache {
+    fn get_default_kvcache(&self) -> Vec<Array3<f32>> {
+        let n_ctx: usize;
+        let kv_len: usize;
         match self.version {
-            WhisperVersion::Tiny => KVCache::default(384, 8),
-            WhisperVersion::Base => KVCache::default(512, 12),
-            WhisperVersion::Small => KVCache::default(768, 24),
+            WhisperVersion::Tiny => {
+                n_ctx = 384;
+                kv_len = 8;
+            }
+            WhisperVersion::Base => {
+                n_ctx = 512;
+                kv_len = 12;
+            }
+            WhisperVersion::Small => {
+                n_ctx = 768;
+                kv_len = 24;
+            }
         }
+        let shape = Dim([1, 0, n_ctx]);
+        let value: Array3<f32> = Array3::zeros(shape);
+        vec![value; kv_len]
     }
 
     fn inference_logits(
         &self,
         tokens: ArrayView2<i32>,
         decoder_inputs: &[(NodeId, Output)],
-        kv_cache: &KVCache,
+        kv_cache: Vec<Array3<f32>>,
         initial_token_length: usize,
-    ) -> (Array3<f32>, KVCache) {
+    ) -> (Array3<f32>, Vec<Array3<f32>>) {
         let tokens = if tokens.shape()[1] > initial_token_length {
             tokens.slice_move(s![.., -1]).insert_axis(Axis(0))
         } else {
@@ -118,20 +132,20 @@ impl Whisper {
         let mut inputs: Vec<(NodeId, InputOrOutput)> = vec![(tokens_id, tokens.into())];
 
         // Add the inputs of kv_cache
-        inputs.extend((0..kv_cache.value.len()).map(|idx| {
+        inputs.extend((0..kv_cache.len()).map(|idx| {
             if idx % 2 == 0 {
                 (
                     self.decoder
                         .node_id(format!("k{}", idx / 2).as_str())
                         .unwrap(),
-                    as_ndtensor_view(kv_cache.value[idx].view()).unwrap().into(),
+                    as_ndtensor_view(kv_cache[idx].view()).unwrap().into(),
                 )
             } else {
                 (
                     self.decoder
                         .node_id(format!("v{}", idx / 2).as_str())
                         .unwrap(),
-                    as_ndtensor_view(kv_cache.value[idx].view()).unwrap().into(),
+                    as_ndtensor_view(kv_cache[idx].view()).unwrap().into(),
                 )
             }
         }));
@@ -146,7 +160,7 @@ impl Whisper {
         let logits_id = self.decoder.node_id("logits").unwrap();
 
         let mut outputs: Vec<NodeId> = vec![logits_id];
-        outputs.extend((0..kv_cache.value.len()).map(|idx| {
+        outputs.extend((0..kv_cache.len()).map(|idx| {
             if idx % 2 == 0 {
                 self.decoder
                     .node_id(format!("output_k{}", idx / 2).as_str())
@@ -164,18 +178,16 @@ impl Whisper {
         let logits: NdTensor<f32, 3> = logits[0].clone().try_into().unwrap();
         let logits = into_array(logits);
 
-        let new_kv_cache = KVCache {
-            value: kv_cache
-                .to_vec()
-                .into_iter()
-                .map(|element| {
-                    let element: NdTensor<f32, 3> = element.try_into().unwrap();
-                    into_array(element)
-                })
-                .collect(),
-        };
+        let kv_cache = kv_cache
+            .to_vec()
+            .into_iter()
+            .map(|element| {
+                let element: NdTensor<f32, 3> = element.try_into().unwrap();
+                into_array(element)
+            })
+            .collect();
 
-        (logits, new_kv_cache)
+        (logits, kv_cache)
     }
 
     fn get_audio_features(&self, segments: Vec<Array2<f32>>) -> Array3<f32> {
@@ -254,7 +266,7 @@ impl Whisper {
             (logits, kv_cache) = self.inference_logits(
                 tokens.view(),
                 &decoder_inputs,
-                &kv_cache,
+                kv_cache,
                 initial_token_length,
             );
             let next_word = logits

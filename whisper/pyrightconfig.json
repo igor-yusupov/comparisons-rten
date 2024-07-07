@@ -1,8 +1,8 @@
 {
-    "reportMissingImports": false,
-    "reportMissingModuleSource": false,
-    "reportUnusedImport": true,
-    "reportUnusedClass": true,
-    "reportUnusedFunction": true,
-    "reportUnusedVariable": true
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "reportUnusedImport": true,
+  "reportUnusedClass": true,
+  "reportUnusedFunction": true,
+  "reportUnusedVariable": true
 }
