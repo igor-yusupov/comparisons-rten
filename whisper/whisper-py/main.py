@@ -170,8 +170,8 @@ def new_kv_cache(n_group: int, length: int = 451) -> np.ndarray:
         size = [12, n_group, length, 512]
     elif model_type == "small.en" or model_type == "small":
         size = [24, n_group, length, 768]
-    # elif model_type == "medium.en" or model_type == "medium":
-    #     size = [48, n_group, length, 1024]
+    elif model_type == "medium.en" or model_type == "medium":
+        size = [48, n_group, length, 1024]
     # elif model_type == "large":
     #     size = [64, n_group, length, 1280]
     else:
@@ -619,6 +619,9 @@ def main(args: argparse.Namespace) -> None:
     elif model_type == "small.en" or model_type == "small":
         WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "small_encoder.onnx")
         WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "small_decoder.onnx")
+    elif model_type == "medium.en" or model_type == "medium":
+        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "medium_encoder.onnx")
+        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "medium_decoder.onnx")
 
     enc_net = onnxruntime.InferenceSession(
         WEIGHT_ENC_PATH, providers=providers

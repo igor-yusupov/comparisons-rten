@@ -16,6 +16,7 @@ impl Args {
             "tiny" => version = WhisperVersion::Tiny,
             "base" => version = WhisperVersion::Base,
             "small" => version = WhisperVersion::Small,
+            "medium" => version = WhisperVersion::Medium,
             _ => version = WhisperVersion::Base,
         }
 
@@ -52,7 +53,7 @@ fn test_whisper(model_version: WhisperVersion) {
                 "../weights/tiny_decoder.rten",
                 "../assets/multilingual.tiktoken",
                 "../assets/mel_filters.npz",
-                WhisperVersion::Tiny,
+                model_version,
             );
         }
         WhisperVersion::Base => {
@@ -61,7 +62,7 @@ fn test_whisper(model_version: WhisperVersion) {
                 "../weights/base_decoder.rten",
                 "../assets/multilingual.tiktoken",
                 "../assets/mel_filters.npz",
-                WhisperVersion::Base,
+                model_version,
             );
         }
         WhisperVersion::Small => {
@@ -70,7 +71,16 @@ fn test_whisper(model_version: WhisperVersion) {
                 "../weights/small_decoder.rten",
                 "../assets/multilingual.tiktoken",
                 "../assets/mel_filters.npz",
-                WhisperVersion::Small,
+                model_version,
+            );
+        }
+        WhisperVersion::Medium => {
+            whisper_model = whisper::Whisper::new(
+                "../weights/medium_encoder.rten",
+                "../weights/medium_decoder.rten",
+                "../assets/multilingual.tiktoken",
+                "../assets/mel_filters.npz",
+                model_version,
             );
         }
     }

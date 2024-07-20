@@ -50,10 +50,10 @@ class DecoderModel(nn.Module):
         )
 
 
-def export_encoder(model, model_name):
+def export_encoder(model, n_mels, model_name):
     model = EncoderModel(model).eval()
 
-    x = torch.zeros((1, 80, 3000), dtype=torch.float32)
+    x = torch.zeros((1, n_mels, 3000), dtype=torch.float32)
     input_names = ["mel"]
     dynamic_axes = {"mel": {0: "batch_size"}}
 
@@ -136,6 +136,8 @@ def main() -> None:
     model = whisper.load_model(args.model_type.value)
     model = model.eval()
 
+    dims = model.dims
+
     os.makedirs(WEIGHTS_DIR, exist_ok=True)
     torch.save(
         model.encoder.state_dict(),
@@ -149,8 +151,6 @@ def main() -> None:
             WEIGHTS_DIR, f"{args.model_type.value}_{DECODER_NAME}.pt"
         ),
     )
-
-    dims = model.dims
 
     encoder = AudioEncoder(
         n_mels=dims.n_mels,
@@ -186,6 +186,7 @@ def main() -> None:
 
     export_encoder(
         encoder,
+        dims.n_mels,
         os.path.join(
             WEIGHTS_DIR, f"{args.model_type.value}_{ENCODER_NAME}.onnx"
         ),

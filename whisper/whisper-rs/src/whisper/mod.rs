@@ -43,6 +43,7 @@ pub enum WhisperVersion {
     Tiny,
     Base,
     Small,
+    Medium,
 }
 
 pub struct Whisper {
@@ -105,6 +106,10 @@ impl Whisper {
             WhisperVersion::Small => {
                 n_ctx = 768;
                 kv_len = 24;
+            }
+            WhisperVersion::Medium => {
+                n_ctx = 1024;
+                kv_len = 48;
             }
         }
         let shape = Dim([1, 0, n_ctx]);
