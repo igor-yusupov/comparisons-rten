@@ -6,10 +6,10 @@ from enum import Enum
 
 import torch
 import torch.nn as nn
-from src.decoder import TextDecoder
-from src.encoder import AudioEncoder
 
 import whisper
+from src.decoder import TextDecoder
+from src.encoder import AudioEncoder
 
 WEIGHTS_DIR = "weights"
 ENCODER_NAME = "encoder"

@@ -7,6 +7,7 @@ from collections import namedtuple
 import numpy as np
 import onnxruntime
 import tqdm
+
 from src.audio import SAMPLE_RATE  # CHUNK_LENGTH,
 from src.audio import (
     HOP_LENGTH,
@@ -610,18 +611,35 @@ def main(args: argparse.Namespace) -> None:
 
     global WEIGHT_ENC_PATH, WEIGHT_DEC_PATH
     model_type = args.model_type
+    postfix = "_quant" if args.quant else ""
     if model_type == "tiny.en" or model_type == "tiny":
-        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "tiny_encoder.onnx")
-        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "tiny_decoder.onnx")
+        WEIGHT_ENC_PATH = os.path.join(
+            WEIGHTS_DIR, f"tiny_encoder{postfix}.onnx"
+        )
+        WEIGHT_DEC_PATH = os.path.join(
+            WEIGHTS_DIR, f"tiny_decoder{postfix}.onnx"
+        )
     elif model_type == "base.en" or model_type == "base":
-        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "base_encoder.onnx")
-        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "base_decoder.onnx")
+        WEIGHT_ENC_PATH = os.path.join(
+            WEIGHTS_DIR, f"base_encoder{postfix}.onnx"
+        )
+        WEIGHT_DEC_PATH = os.path.join(
+            WEIGHTS_DIR, f"base_decoder{postfix}.onnx"
+        )
     elif model_type == "small.en" or model_type == "small":
-        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "small_encoder.onnx")
-        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "small_decoder.onnx")
+        WEIGHT_ENC_PATH = os.path.join(
+            WEIGHTS_DIR, f"small_encoder{postfix}.onnx"
+        )
+        WEIGHT_DEC_PATH = os.path.join(
+            WEIGHTS_DIR, f"small_decoder{postfix}.onnx"
+        )
     elif model_type == "medium.en" or model_type == "medium":
-        WEIGHT_ENC_PATH = os.path.join(WEIGHTS_DIR, "medium_encoder.onnx")
-        WEIGHT_DEC_PATH = os.path.join(WEIGHTS_DIR, "medium_decoder.onnx")
+        WEIGHT_ENC_PATH = os.path.join(
+            WEIGHTS_DIR, f"medium_encoder{postfix}.onnx"
+        )
+        WEIGHT_DEC_PATH = os.path.join(
+            WEIGHTS_DIR, f"medium_decoder{postfix}.onnx"
+        )
 
     enc_net = onnxruntime.InferenceSession(
         WEIGHT_ENC_PATH, providers=providers
@@ -637,11 +655,13 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # parser.add_argument(
-    #     "--quant", action="store_true", help="Use quant models"
-    # )
+    parser.add_argument(
+        "--quant", action="store_true", help="Use quant models"
+    )
     parser.add_argument(
         "--model_type", default="base", type=str, help="Use quant models"
     )
     args = parser.parse_args()
+    start = time.time()
     main(args)
+    print(f"Total inference time: {time.time() - start} seconds")
