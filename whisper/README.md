@@ -13,6 +13,11 @@ rten-convert {encoder_name}
 rten-convert {decoder_name}
 ```
 
+### Quantization (optional)
+```
+python3 quant.py --model_type {tiny, base or small}
+```
+
 ### Run rust code:
 
 ```
@@ -27,4 +32,12 @@ cargo run --release {tiny, base, small}
 cd whisper-py
 
 python3 main.py --model_type {tiny, base or small}
+```
+
+### Run python code with quantized models (optional):
+
+```
+cd whisper-py
+
+python3 main.py --model_type {tiny, base or small} --quant
 ```
