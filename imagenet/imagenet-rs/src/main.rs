@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::time::Instant;
 
 use image;
 use rten::{Model, Operators};
@@ -168,7 +169,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         224,
         224,
     )?;
+    let start = Instant::now();
     let logits: NdTensor<f32, 2> = model.run_one(img_tensor.view().into(), None)?.try_into()?;
+    let duration = start.elapsed();
+    println!("Inference time: {:?}", duration);
+
     match logits.arg_max(1, true)?.data() {
         Some(value) => println!("Got label: {:?}", value),
         None => println!("Didn't find label"),

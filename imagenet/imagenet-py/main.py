@@ -46,7 +46,7 @@ def main(model_type: ModelType, is_quant: bool) -> None:
 
     start = time.time()
     output = model.run(None, {"input": image})
-    print(f"Inference time: {time.time() - start}")
+    print(f"Inference time: {(time.time() - start) * 1000} ms")
     label = np.argmax(output[0])
 
     print(f"Got label: {label}")
