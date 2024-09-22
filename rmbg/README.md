@@ -1,6 +1,6 @@
 ## Quick start
 
-Download [weights](https://huggingface.co/briaai/RMBG-1.4/tree/main/onnx) and put them to `weights` directory
+Download [weights](https://huggingface.co/briaai/RMBG-1.4/tree/main/onnx) and put them to `weights` directory.
 Create `data` directory and put there some image with name `image.jpeg`
 
 ### Export weights
